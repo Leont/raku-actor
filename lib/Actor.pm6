@@ -20,8 +20,26 @@ class Queue {
 	}
 }
 
+enum Result <Exit Error>;
+
+class Handle { ... }
+
 my class ActorQueue is Queue {
 	has Promise:D $.promise = Promise.new;
+	has Handle:D @!monitors = Array[Handle:D].new;
+
+	submethod TWEAK {
+		$!promise.then({
+			my @message = $!promise.status === Kept ?? (Exit, $!promise.result) !! (Error, $!promise.cause);
+			for @!monitors -> $monitor {
+				$monitor.send: @message;
+			}
+		});
+	}
+
+	method add-monitor(Handle:D $handle) {
+		@!monitors.push: $handle;
+	}
 }
 
 class Handle does Awaitable {
@@ -39,6 +57,10 @@ class Handle does Awaitable {
 
 	method alive(--> Bool:D) {
 		return $!queue.promise ~~ Planned;
+	}
+
+	method add-monitor(Handle:D $handle = $*MAILBOX.handle) {
+		$!queue.add-monitor: $handle;
 	}
 
 	method WHICH(--> ObjAt:D) {
