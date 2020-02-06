@@ -68,12 +68,35 @@ class Handle does Awaitable {
 	}
 }
 
+my class Stop is Exception { }
+
 my class Mailbox {
 	has ActorQueue:D $!queue is required;
+	has Any @!buffer;
 	submethod BUILD(ActorQueue:D :$!queue) {}
 
-	method receive(--> Any) {
-		return |$!queue.dequeue;
+	method receive(@blocks --> Any) {
+		for @!buffer -> @message {
+			for @blocks -> Code $candidate {
+				return $candidate.(|@message) if @message ~~ $candidate.signature;
+			}
+		}
+		loop {
+			my @message = |$!queue.dequeue;
+			for @blocks -> Code $candidate {
+				return $candidate.(|@message) if @message ~~ $candidate.signature;
+			}
+			@!buffer.push: @message;
+		}
+	}
+	method receive-loop(@blocks --> Any) {
+		FOO:
+		loop {
+			receive(@blocks);
+			CATCH { when Stop {
+				last FOO;
+			}}
+		}
 	}
 	method handle(--> Handle:D) {
 		return Handle.new(:$!queue);
@@ -92,12 +115,20 @@ sub spawn(&callable, *@args --> Handle:D) is export(:DEFAULT, :spawn, :functions
 	return Handle.new(:$queue);
 }
 
-sub receive(--> Any) is export(:DEFAULT, :receive, :functions) {
-	return $*MAILBOX.receive;
+sub receive(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
+	$*MAILBOX.receive(@blocks);
+}
+
+sub receive-loop(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
+	$*MAILBOX.receive-loop(@blocks);
 }
 
 sub self-handle(--> Handle:D) is export(:DEFAULT, :self-handle, :functions) {
 	return $*MAILBOX.handle;
+}
+
+sub leave-loop(--> Nil) is export {
+	Stop.new.throw;
 }
 
 =begin pod
