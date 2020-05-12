@@ -135,7 +135,7 @@ sub leave-loop(--> Nil) is export {
 
 =head1 NAME
 
-Actor - blah blah blah
+Actor - an actor model threading library
 
 =head1 SYNOPSIS
 
@@ -143,11 +143,24 @@ Actor - blah blah blah
 
 use Actor;
 
+my $actor = spawn {
+	given receive() {
+		when Int {
+			say "We got"
+		}
+		when :(Int, Str) {
+		}
+	}
+}
+
+$actor.send("message");
+$actor.send(42, "Danger, Will Robinson");
+
 =end code
 
 =head1 DESCRIPTION
 
-Actor is ...
+Actor is a module that implements actor model threading for perl 6.
 
 =head1 AUTHOR
 
