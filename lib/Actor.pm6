@@ -42,6 +42,8 @@ my class ActorQueue is Queue {
 	}
 }
 
+my sub mailbox { ... }
+
 class Handle does Awaitable {
 	has ActorQueue:D $!queue is required;
 
@@ -59,7 +61,7 @@ class Handle does Awaitable {
 		return $!queue.promise ~~ Planned;
 	}
 
-	method add-monitor(Handle:D $handle = $*MAILBOX.handle) {
+	method add-monitor(Handle:D $handle = mailbox.handle) {
 		$!queue.add-monitor: $handle;
 	}
 
@@ -119,16 +121,23 @@ sub spawn(&callable, *@args --> Handle:D) is export(:DEFAULT, :spawn, :functions
 	return Handle.new(:$queue);
 }
 
+my $loading-thread = $*THREAD;
+my $initial-mailbox = Mailbox.new: :queue(ActorQueue.new);
+
+my sub mailbox() {
+	return $*THREAD === $loading-thread ?? $initial-mailbox !! $*MAILBOX orelse die "This thread has no mailbox";
+}
+
 sub receive(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
-	$*MAILBOX.receive(@blocks);
+	mailbox.receive(@blocks);
 }
 
 sub receive-loop(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
-	$*MAILBOX.receive-loop(@blocks);
+	mailbox.receive-loop(@blocks);
 }
 
 sub self-handle(--> Handle:D) is export(:DEFAULT, :self-handle, :functions) {
-	return $*MAILBOX.handle;
+	return mailbox.handle;
 }
 
 sub leave-loop(--> Nil) is export {
