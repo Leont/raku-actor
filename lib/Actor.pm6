@@ -1,32 +1,13 @@
 use v6.c;
 unit module Actor:ver<0.0.1>:auth<cpan:LEONT>;
 
-class Queue {
-	has Lock:D $!lock = Lock.new;
-	has Lock::ConditionVariable:D $!condition = $!lock.condition;
-	has Any @!queue;
-
-	method enqueue(Any $value --> Nil) {
-		$!lock.protect: {
-			@!queue.push: $value;
-			$!condition.signal;
-		};
-	}
-	method dequeue(--> Any) {
-		$!lock.protect: {
-			$!condition.wait while not @!queue;
-			return @!queue.shift;
-		};
-	}
-}
-
 enum Result is export(:DEFAULT, :enums) <Exit Error>;
 
 class Handle { ... }
 my class Receiver { ... }
 
 my class Mailbox {
-	has Queue:D $!queue = Queue.new;
+	has Channel:D $!channel = Channel.new;
 	has Promise:D $.promise = Promise.new;
 	has Handle:D @!monitors;
 	has Lock:D $!lock = Lock.new;
@@ -54,10 +35,10 @@ my class Mailbox {
 	}
 
 	method send(@value) {
-		$!queue.enqueue(@value);
+		$!channel.send(@value);
 	}
 	method receive() {
-		return |$!queue.dequeue;
+		return |$!channel.receive;
 	}
 
 	method add-monitor(Handle:D $handle) {
