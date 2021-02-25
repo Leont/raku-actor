@@ -23,7 +23,7 @@ class Queue {
 enum Result is export(:DEFAULT, :enums) <Exit Error>;
 
 class Handle { ... }
-my class Mailbox { ... }
+my class Receiver { ... }
 
 my class ActorQueue is Queue {
 	has Promise:D $.promise = Promise.new;
@@ -36,7 +36,7 @@ my class ActorQueue is Queue {
 	multi submethod BUILD(:&starter!, :$monitor!, :@args) {
 		$!channel = Channel.new;
 		$!promise = start {
-			my $*MAILBOX = Mailbox.new(:queue(self));
+			my $*RECEIVER = Receiver.new(:queue(self));
 			starter(|@args);
 		}
 
@@ -64,7 +64,7 @@ my class ActorQueue is Queue {
 	}
 }
 
-my sub mailbox { ... }
+my sub receiver { ... }
 
 class Handle does Awaitable {
 	has ActorQueue:D $!queue is required;
@@ -83,7 +83,7 @@ class Handle does Awaitable {
 		return $!queue.promise ~~ Planned;
 	}
 
-	method add-monitor(Handle:D $handle = mailbox.handle) {
+	method add-monitor(Handle:D $handle = receiver.handle) {
 		$!queue.add-monitor: $handle;
 	}
 
@@ -94,7 +94,7 @@ class Handle does Awaitable {
 
 my class Stop is Exception { }
 
-my class Mailbox {
+my class Receiver {
 	has ActorQueue:D $!queue is required;
 	has Any @!buffer;
 	submethod BUILD(ActorQueue:D :$!queue) {}
@@ -132,28 +132,28 @@ my class Mailbox {
 }
 
 sub spawn(&starter, *@args, Bool :$monitored --> Handle:D) is export(:DEFAULT, :spawn, :functions) {
-	my Handle $monitor = $monitored ?? mailbox.handle !! Handle;
+	my Handle $monitor = $monitored ?? receiver.handle !! Handle;
 	my ActorQueue $queue = ActorQueue.new(:$monitor, :&starter, :@args);
 	return Handle.new(:$queue);
 }
 
 my $loading-thread = $*THREAD;
-my $initial-mailbox = Mailbox.new: :queue(ActorQueue.new);
+my $initial-receiver = Receiver.new(:queue(ActorQueue.new));
 
-my sub mailbox() {
-	return $*THREAD === $loading-thread ?? $initial-mailbox !! $*MAILBOX orelse die "This thread has no mailbox";
+my sub receiver() {
+	return $*THREAD === $loading-thread ?? $initial-receiver !! $*RECEIVER orelse die "This thread has no receiver";
 }
 
 sub receive(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
-	mailbox.receive(@blocks);
+	receiver.receive(@blocks);
 }
 
 sub receive-loop(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
-	mailbox.receive-loop(@blocks);
+	receiver.receive-loop(@blocks);
 }
 
 sub self-handle(--> Handle:D) is export(:DEFAULT, :self-handle, :functions) {
-	return mailbox.handle;
+	return receiver.handle;
 }
 
 sub leave-loop(--> Nil) is export(:DEFAULT, :leave-loop, :functions) {
