@@ -21,6 +21,10 @@ my class Mailbox {
 		$!channel = Channel.new;
 		$!promise = start {
 			my $*RECEIVER = self;
+			LEAVE {
+				$!channel.close;
+				Nil while $!channel.poll;
+			}
 			starter(|@args);
 		}
 
@@ -38,6 +42,7 @@ my class Mailbox {
 
 	method send(@value) {
 		$!channel.send(@value);
+		CATCH { when X::Channel::SendOnClosed { }}
 	}
 
 	method receive(@blocks --> Any) {
