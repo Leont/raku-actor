@@ -20,7 +20,7 @@ class Queue {
 	}
 }
 
-enum Result <Exit Error>;
+enum Result is export(:DEFAULT, :enums) <Exit Error>;
 
 class Handle { ... }
 my class Mailbox { ... }
@@ -156,7 +156,7 @@ sub self-handle(--> Handle:D) is export(:DEFAULT, :self-handle, :functions) {
 	return mailbox.handle;
 }
 
-sub leave-loop(--> Nil) is export {
+sub leave-loop(--> Nil) is export(:DEFAULT, :leave-loop, :functions) {
 	Stop.new.throw;
 }
 
