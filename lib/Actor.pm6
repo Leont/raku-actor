@@ -25,7 +25,8 @@ enum Result is export(:DEFAULT, :enums) <Exit Error>;
 class Handle { ... }
 my class Receiver { ... }
 
-my class Mailbox is Queue {
+my class Mailbox {
+	has Queue:D $!queue = Queue.new;
 	has Promise:D $.promise = Promise.new;
 	has Handle:D @!monitors;
 	has Lock:D $!lock = Lock.new;
@@ -52,6 +53,13 @@ my class Mailbox is Queue {
 		}
 	}
 
+	method send(@value) {
+		$!queue.enqueue(@value);
+	}
+	method receive() {
+		return |$!queue.dequeue;
+	}
+
 	method add-monitor(Handle:D $handle) {
 		$!lock.protect: {
 			if $!promise {
@@ -72,7 +80,7 @@ class Handle does Awaitable {
 	submethod BUILD(Mailbox:D :$!mailbox) {}
 
 	method send(+@arguments --> Nil) {
-		$!mailbox.enqueue: @arguments;
+		$!mailbox.send(@arguments);
 	}
 
 	method get-await-handle(--> Awaitable::Handle:D) {
@@ -110,7 +118,7 @@ my class Receiver {
 			}
 		}
 		loop {
-			my @message = |$!mailbox.dequeue;
+			my @message = $!mailbox.receive;
 			for @blocks -> &candidate {
 				return candidate(|@message) if @message ~~ &candidate.signature;
 			}
