@@ -4,7 +4,8 @@ unit module Actor:ver<0.0.1>:auth<cpan:LEONT>;
 enum Result is export(:DEFAULT, :enums) <Exit Error>;
 
 class Handle { ... }
-my class Receiver { ... }
+
+my class Stop is Exception { }
 
 my class Mailbox {
 	has Channel:D $!channel = Channel.new;
@@ -12,13 +13,14 @@ my class Mailbox {
 	has Handle:D @!monitors;
 	has Lock:D $!lock = Lock.new;
 	has @!status;
+	has Any @!buffer;
 
 	multi submethod BUILD() {
 	}
 	multi submethod BUILD(:&starter!, :$monitor!, :@args) {
 		$!channel = Channel.new;
 		$!promise = start {
-			my $*RECEIVER = Receiver.new(:mailbox(self));
+			my $*RECEIVER = self;
 			starter(|@args);
 		}
 
@@ -37,8 +39,37 @@ my class Mailbox {
 	method send(@value) {
 		$!channel.send(@value);
 	}
-	method receive() {
-		return |$!channel.receive;
+
+	method receive(@blocks --> Any) {
+		for ^@!buffer -> $index {
+			my @message = |@!buffer[$index];
+			for @blocks -> &candidate {
+				if @message ~~ &candidate.signature {
+					@!buffer.splice($index, 1);
+					return candidate(|@message);
+				}
+			}
+		}
+		loop {
+			my @message = |$!channel.receive;
+			for @blocks -> &candidate {
+				return candidate(|@message) if @message ~~ &candidate.signature;
+			}
+			@!buffer.push: @message;
+		}
+	}
+
+	method receive-loop(@blocks --> Any) {
+		loop {
+			receive(@blocks);
+		}
+		CATCH { when Stop {
+			return;
+		}}
+	}
+
+	method handle(--> Handle:D) {
+		return Handle.new(:mailbox(self));
 	}
 
 	method add-monitor(Handle:D $handle) {
@@ -53,7 +84,12 @@ my class Mailbox {
 	}
 }
 
-my sub receiver { ... }
+my $loading-thread = $*THREAD;
+my $initial-receiver = Mailbox.new;
+
+my sub receiver() {
+	return $*THREAD === $loading-thread ?? $initial-receiver !! $*RECEIVER orelse die "This thread has no receiver";
+}
 
 class Handle does Awaitable {
 	has Mailbox:D $!mailbox is required;
@@ -81,57 +117,10 @@ class Handle does Awaitable {
 	}
 }
 
-my class Stop is Exception { }
-
-my class Receiver {
-	has Mailbox:D $!mailbox is required;
-	has Any @!buffer;
-	submethod BUILD(Mailbox:D :$!mailbox) {}
-
-	method receive(@blocks --> Any) {
-		for 0 ..^ @!buffer -> $index {
-			my @message = |@!buffer[$index];
-			for @blocks -> &candidate {
-				if @message ~~ &candidate.signature {
-					@!buffer.splice($index, 1);
-					return candidate(|@message);
-				}
-			}
-		}
-		loop {
-			my @message = $!mailbox.receive;
-			for @blocks -> &candidate {
-				return candidate(|@message) if @message ~~ &candidate.signature;
-			}
-			@!buffer.push: @message;
-		}
-	}
-
-	method receive-loop(@blocks --> Any) {
-		FOO:
-		loop {
-			receive(@blocks);
-			CATCH { when Stop {
-				last FOO;
-			}}
-		}
-	}
-	method handle(--> Handle:D) {
-		return Handle.new(:$!mailbox);
-	}
-}
-
 sub spawn(&starter, *@args, Bool :$monitored --> Handle:D) is export(:DEFAULT, :spawn, :functions) {
 	my Handle $monitor = $monitored ?? receiver.handle !! Handle;
 	my Mailbox $mailbox = Mailbox.new(:$monitor, :&starter, :@args);
 	return Handle.new(:$mailbox);
-}
-
-my $loading-thread = $*THREAD;
-my $initial-receiver = Receiver.new(:mailbox(Mailbox.new));
-
-my sub receiver() {
-	return $*THREAD === $loading-thread ?? $initial-receiver !! $*RECEIVER orelse die "This thread has no receiver";
 }
 
 sub receive(*@blocks --> Nil) is export(:DEFAULT, :receive, :functions) {
