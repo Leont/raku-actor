@@ -23,22 +23,44 @@ class Queue {
 enum Result <Exit Error>;
 
 class Handle { ... }
+my class Mailbox { ... }
 
 my class ActorQueue is Queue {
 	has Promise:D $.promise = Promise.new;
-	has Handle:D @!monitors = Array[Handle:D].new;
+	has Handle:D @!monitors;
+	has Lock:D $!lock = Lock.new;
+	has @!status;
 
-	submethod TWEAK {
-		$!promise.then({
-			my @message = $!promise.status === Kept ?? (Exit, $!promise.result) !! (Error, $!promise.cause);
-			for @!monitors -> $monitor {
-				$monitor.send: @message;
+	multi submethod BUILD() {
+	}
+	multi submethod BUILD(:&starter!, :$monitor!, :@args) {
+		$!channel = Channel.new;
+		$!promise = start {
+			my $*MAILBOX = Mailbox.new(:queue(self));
+			starter(|@args);
+		}
+
+		@!monitors.push($monitor) with $monitor;
+
+		$!promise.then: {
+			$!lock.protect: {
+				@!status = $!promise.status === Kept ?? (Exit, self.WHICH, $!promise.result) !! (Error, self.WHICH, $!promise.cause);
+				for @!monitors -> $monitor {
+					$monitor.send: @!status;
+				}
 			}
-		});
+		}
 	}
 
 	method add-monitor(Handle:D $handle) {
-		@!monitors.push: $handle;
+		$!lock.protect: {
+			if $!promise {
+				$handle.send: @!status;
+			}
+			else {
+				@!monitors.push: $handle;
+			}
+		}
 	}
 }
 
@@ -109,15 +131,9 @@ my class Mailbox {
 	}
 }
 
-sub spawn(&callable, *@args --> Handle:D) is export(:DEFAULT, :spawn, :functions) {
-	my $queue = ActorQueue.new;
-	my $promise = start {
-		my $*MAILBOX = Mailbox.new(:$queue);
-		$queue.promise.keep: callable(|@args);
-		CATCH { default {
-			$queue.promise.break: $_;
-		} }
-	}
+sub spawn(&starter, *@args, Bool :$monitored --> Handle:D) is export(:DEFAULT, :spawn, :functions) {
+	my Handle $monitor = $monitored ?? mailbox.handle !! Handle;
+	my ActorQueue $queue = ActorQueue.new(:$monitor, :&starter, :@args);
 	return Handle.new(:$queue);
 }
 
