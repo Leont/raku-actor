@@ -76,15 +76,19 @@ my class Mailbox {
 	submethod BUILD(ActorQueue:D :$!queue) {}
 
 	method receive(@blocks --> Any) {
-		for @!buffer -> @message {
-			for @blocks -> Code $candidate {
-				return $candidate.(|@message) if @message ~~ $candidate.signature;
+		for 0 ..^ @!buffer -> $index {
+			my @message = |@!buffer[$index];
+			for @blocks -> &candidate {
+				if @message ~~ &candidate.signature {
+					@!buffer.splice($index, 1);
+					return candidate(|@message);
+				}
 			}
 		}
 		loop {
 			my @message = |$!queue.dequeue;
-			for @blocks -> Code $candidate {
-				return $candidate.(|@message) if @message ~~ $candidate.signature;
+			for @blocks -> &candidate {
+				return candidate(|@message) if @message ~~ &candidate.signature;
 			}
 			@!buffer.push: @message;
 		}
