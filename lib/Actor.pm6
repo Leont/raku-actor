@@ -25,7 +25,7 @@ enum Result is export(:DEFAULT, :enums) <Exit Error>;
 class Handle { ... }
 my class Receiver { ... }
 
-my class ActorQueue is Queue {
+my class Mailbox is Queue {
 	has Promise:D $.promise = Promise.new;
 	has Handle:D @!monitors;
 	has Lock:D $!lock = Lock.new;
@@ -36,7 +36,7 @@ my class ActorQueue is Queue {
 	multi submethod BUILD(:&starter!, :$monitor!, :@args) {
 		$!channel = Channel.new;
 		$!promise = start {
-			my $*RECEIVER = Receiver.new(:queue(self));
+			my $*RECEIVER = Receiver.new(:mailbox(self));
 			starter(|@args);
 		}
 
@@ -67,37 +67,37 @@ my class ActorQueue is Queue {
 my sub receiver { ... }
 
 class Handle does Awaitable {
-	has ActorQueue:D $!queue is required;
+	has Mailbox:D $!mailbox is required;
 
-	submethod BUILD(ActorQueue:D :$!queue) {}
+	submethod BUILD(Mailbox:D :$!mailbox) {}
 
 	method send(+@arguments --> Nil) {
-		$!queue.enqueue: @arguments;
+		$!mailbox.enqueue: @arguments;
 	}
 
 	method get-await-handle(--> Awaitable::Handle:D) {
-		return $!queue.promise.get-await-handle;
+		return $!mailbox.promise.get-await-handle;
 	}
 
 	method alive(--> Bool:D) {
-		return $!queue.promise ~~ Planned;
+		return not $!mailbox.promise;
 	}
 
 	method add-monitor(Handle:D $handle = receiver.handle) {
-		$!queue.add-monitor: $handle;
+		$!mailbox.add-monitor: $handle;
 	}
 
 	method WHICH(--> ObjAt:D) {
-		return $!queue.WHICH;
+		return $!mailbox.WHICH;
 	}
 }
 
 my class Stop is Exception { }
 
 my class Receiver {
-	has ActorQueue:D $!queue is required;
+	has Mailbox:D $!mailbox is required;
 	has Any @!buffer;
-	submethod BUILD(ActorQueue:D :$!queue) {}
+	submethod BUILD(Mailbox:D :$!mailbox) {}
 
 	method receive(@blocks --> Any) {
 		for 0 ..^ @!buffer -> $index {
@@ -110,13 +110,14 @@ my class Receiver {
 			}
 		}
 		loop {
-			my @message = |$!queue.dequeue;
+			my @message = |$!mailbox.dequeue;
 			for @blocks -> &candidate {
 				return candidate(|@message) if @message ~~ &candidate.signature;
 			}
 			@!buffer.push: @message;
 		}
 	}
+
 	method receive-loop(@blocks --> Any) {
 		FOO:
 		loop {
@@ -127,18 +128,18 @@ my class Receiver {
 		}
 	}
 	method handle(--> Handle:D) {
-		return Handle.new(:$!queue);
+		return Handle.new(:$!mailbox);
 	}
 }
 
 sub spawn(&starter, *@args, Bool :$monitored --> Handle:D) is export(:DEFAULT, :spawn, :functions) {
 	my Handle $monitor = $monitored ?? receiver.handle !! Handle;
-	my ActorQueue $queue = ActorQueue.new(:$monitor, :&starter, :@args);
-	return Handle.new(:$queue);
+	my Mailbox $mailbox = Mailbox.new(:$monitor, :&starter, :@args);
+	return Handle.new(:$mailbox);
 }
 
 my $loading-thread = $*THREAD;
-my $initial-receiver = Receiver.new(:queue(ActorQueue.new));
+my $initial-receiver = Receiver.new(:mailbox(Mailbox.new));
 
 my sub receiver() {
 	return $*THREAD === $loading-thread ?? $initial-receiver !! $*RECEIVER orelse die "This thread has no receiver";
