@@ -8,7 +8,7 @@
   "description" : "blah blah blah",
   "license" : "Artistic-2.0",
   "name" : "Actor",
-  "perl" : "6.c",
+  "perl" : "6.d",
   "provides" : {
     "Actor" : "lib/Actor.pm6",
     "Actor::Queue" : "lib/Actor.pm6",
