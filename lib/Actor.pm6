@@ -71,7 +71,7 @@ class Handle does Awaitable {
 
 	submethod BUILD(ActorQueue:D :$!queue) {}
 
-	method send(*@arguments --> Nil) {
+	method send(+@arguments --> Nil) {
 		$!queue.enqueue: @arguments;
 	}
 
