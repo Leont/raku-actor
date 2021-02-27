@@ -120,6 +120,10 @@ class Handle does Awaitable {
 	method WHICH(--> ObjAt:D) {
 		return $!mailbox.WHICH;
 	}
+
+	method Str() {
+		return $!mailbox.WHICH.Str.subst(/Mailbox/, 'Handle');
+	}
 }
 
 sub spawn(&starter, *@args, Bool :$monitored --> Handle:D) is export(:DEFAULT, :spawn, :functions) {
