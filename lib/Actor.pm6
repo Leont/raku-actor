@@ -32,7 +32,7 @@ my class Mailbox {
 
 		$!promise.then: {
 			$!lock.protect: {
-				@!status = $!promise.status === Kept ?? (Exit, self.WHICH, $!promise.result) !! (Error, self.WHICH, $!promise.cause);
+				@!status = $!promise.status === Kept ?? (Exit, self.handle, $!promise.result) !! (Error, self.handle, $!promise.cause);
 				for @!monitors -> $monitor {
 					$monitor.send: @!status;
 				}
