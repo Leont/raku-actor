@@ -13,7 +13,7 @@ my class Mailbox {
 	has Handle:D @!monitors;
 	has Lock:D $!lock = Lock.new;
 	has @!status;
-	has Any @!buffer;
+	has Capture @!buffer;
 
 	multi submethod BUILD() {
 	}
@@ -34,33 +34,33 @@ my class Mailbox {
 			$!lock.protect: {
 				@!status = $!promise.status === Kept ?? (Exit, self.handle, $!promise.result) !! (Error, self.handle, $!promise.cause);
 				for @!monitors -> $monitor {
-					$monitor.send: @!status;
+					$monitor.send: |@!status;
 				}
 			}
 		}
 	}
 
-	method send(@value) {
-		$!channel.send(@value);
+	method send(Capture $value) {
+		$!channel.send($value);
 		CATCH { when X::Channel::SendOnClosed { }}
 	}
 
 	method receive(@blocks --> Any) {
 		for ^@!buffer -> $index {
-			my @message = |@!buffer[$index];
+			my Capture $message = @!buffer[$index];
 			for @blocks -> &candidate {
-				if @message ~~ &candidate.signature {
+				if $message ~~ &candidate.signature {
 					@!buffer.splice($index, 1);
-					return candidate(|@message);
+					return candidate(|$message);
 				}
 			}
 		}
 		loop {
-			my @message = |$!channel.receive;
+			my Capture $message = $!channel.receive;
 			for @blocks -> &candidate {
-				return candidate(|@message) if @message ~~ &candidate.signature;
+				return candidate(|$message) if $message ~~ &candidate.signature;
 			}
-			@!buffer.push: @message;
+			@!buffer.push: $message;
 		}
 	}
 
@@ -80,7 +80,7 @@ my class Mailbox {
 	method add-monitor(Handle:D $handle) {
 		$!lock.protect: {
 			if $!promise {
-				$handle.send: @!status;
+				$handle.send: |@!status;
 			}
 			else {
 				@!monitors.push: $handle;
@@ -101,8 +101,8 @@ class Handle does Awaitable {
 
 	submethod BUILD(Mailbox:D :$!mailbox) {}
 
-	method send(+@arguments --> Nil) {
-		$!mailbox.send(@arguments);
+	method send(|arguments --> Nil) {
+		$!mailbox.send(arguments);
 	}
 
 	method get-await-handle(--> Awaitable::Handle:D) {

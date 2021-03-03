@@ -5,7 +5,7 @@ use Actor;
 my $thread = spawn {
 	receive
 		-> $other {
-			$other.send('foo');
+			$other.send(:foo);
 			$other.send('bar');
 		};
 	42;
@@ -38,8 +38,8 @@ receive-loop
 				flunk('Should match foo after bar');
 				diag('Matched bar instead')
 			},
-			-> 'foo' {
-				pass('Should match foo after bar');
+			-> :$foo {
+				ok($foo, 'Should match foo after bar');
 			}
 	};
 
