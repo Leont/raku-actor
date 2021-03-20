@@ -10,10 +10,18 @@ my class Stop is Exception { }
 my class Mailbox {
 	has Channel:D $!channel = Channel.new;
 	has Promise:D $.promise = Promise.new;
-	has Handle:D @!monitors;
+	has Handle:D %!monitors;
 	has Lock:D $!lock = Lock.new;
 	has @!status;
 	has Capture @!buffer;
+
+	my class MonitorId {
+		my atomicint $counter = 0;
+		has Int $!id = $counter⚛++;
+		method WHICH() {
+			return $!id.WHICH;
+		}
+	}
 
 	multi submethod BUILD() {
 	}
@@ -28,12 +36,12 @@ my class Mailbox {
 			starter(|@args);
 		}
 
-		@!monitors.push($monitor) with $monitor;
+		%!monitors{MonitorId.new} = $monitor with $monitor;
 
 		$!promise.then: {
 			$!lock.protect: {
 				@!status = $!promise.status === Kept ?? (Exit, self.handle, $!promise.result) !! (Error, self.handle, $!promise.cause);
-				for @!monitors -> $monitor {
+				for %!monitors.values -> $monitor {
 					$monitor.send: |@!status;
 				}
 			}
@@ -77,14 +85,22 @@ my class Mailbox {
 		return Handle.new(:mailbox(self));
 	}
 
-	method add-monitor(Handle:D $handle) {
+	method add-monitor(Handle:D $handle --> MonitorId:D) {
 		$!lock.protect: {
+			my $id = MonitorId.new;
 			if $!promise {
 				$handle.send: |@!status;
 			}
 			else {
-				@!monitors.push: $handle;
+				%!monitors{$id} = $handle;
 			}
+			return $id;
+		}
+	}
+
+	method remove-monitor(MonitorId:D $id --> Nil) {
+		$!lock.protect: {
+			return ?%!monitors{$id}:delete;
 		}
 	}
 }
