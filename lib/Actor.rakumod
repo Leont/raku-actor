@@ -109,7 +109,7 @@ my $loading-thread = $*THREAD;
 my $initial-receiver = Mailbox.new;
 
 my sub receiver() {
-	return $*THREAD === $loading-thread ?? $initial-receiver !! $*RECEIVER orelse die "This thread has no receiver";
+	return $*THREAD === $loading-thread ?? $initial-receiver !! $*RECEIVER // die "This thread has no receiver";
 }
 
 class Handle does Awaitable {
