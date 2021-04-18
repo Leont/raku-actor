@@ -5,7 +5,7 @@
   ],
   "build-depends" : [ ],
   "depends" : [ ],
-  "description" : "blah blah blah",
+  "description" : "an actor model threading library",
   "license" : "Artistic-2.0",
   "name" : "Actor",
   "perl" : "6.d",
@@ -13,7 +13,7 @@
     "Actor" : "lib/Actor.rakumod"
   },
   "resources" : [ ],
-  "source-url" : "",
+  "source-url" : "https://github.com/Leont/raku-actor.git",
   "tags" : [ ],
   "test-depends" : [ ],
   "version" : "0.0.1"
