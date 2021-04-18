@@ -10,9 +10,7 @@
   "name" : "Actor",
   "perl" : "6.d",
   "provides" : {
-    "Actor" : "lib/Actor.pm6",
-    "Actor::Queue" : "lib/Actor.pm6",
-    "Actor::Handle" : "lib/Actor.pm6"
+    "Actor" : "lib/Actor.rakumod"
   },
   "resources" : [ ],
   "source-url" : "",
